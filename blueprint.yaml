@@ -1,0 +1,61 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+imports:
+  - http://www.getcloudify.org/spec/cloudify/4.6/types.yaml
+  - include/type-definitions.yaml
+
+inputs:
+
+  first_ip :
+    description : First Server IP
+    type : string
+
+  second_ip :
+    description : Second Server IP
+    type : string
+
+  apache_listening_port:
+    type: integer
+
+node_templates:
+
+  first_host:
+    type: cloudify.nodes.Compute
+    properties:
+      ip: { get_input: first_ip }
+      agent_config:
+        user: centos
+        key: { get_secret: lab_key_private}
+    relationships:
+      - type: cloudify.relationships.connected_to
+        target: second_host
+
+  second_host:
+    type: cloudify.nodes.Compute
+    properties:
+      ip: { get_input: second_ip }
+      agent_config:
+        user: centos
+        key: { get_secret: lab_key_private}
+
+  web_server:
+    type: apache
+    properties:
+      port: { get_input: apache_listening_port }
+    relationships:
+      - target: first_host
+        type: cloudify.relationships.contained_in
+
+  my_app:
+    type: static_web_app
+    properties:
+      web_page: resources/hello.html
+      ip_address: { get_property : [second_host, ip]}
+    relationships:
+      - target: web_server
+        type: app_contained_in_apache
+
+outputs:
+  installation_info:
+    value:
+      url: { concat: [ 'http://', { get_property: [ first_host, ip ] }, ':', { get_property: [ web_server, port ] }, '/app/hello.html' ] }
